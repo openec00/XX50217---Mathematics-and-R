@@ -1,0 +1,474 @@
+# RCODE
+# ---
+
+##-------METHODOLOGY AND DESIGN------------##
+
+#-----CREATE A SUMMARY TABLE OF TOTAL AREA BY PRIMARY USE:
+# ---
+# Load the tidyverse package for data manipulation and visualization
+library(tidyverse)
+
+# Load data from a specified path
+data <- read_csv("C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/GiGL_SpacesToVisit.csv")
+
+# Data transformation involving:
+# 1. Renaming columns for clarity.
+# 2. Converting area from hectares to square kilometers for consistency with larger scale geographic data.
+# 3. Capitalizing borough names for standardization.
+data <- data %>%
+  rename(`Primary Use` = PrimaryUse, `Area (Ha)` = AreaHa) %>%
+  mutate(`Area (km²)` = `Area (Ha)` / 100,  # Conversion factor from hectares to square kilometers.
+         Borough = str_to_title(Borough))  # Ensures each word in borough names starts with a capital letter.
+
+# Define a constant for the total area of Greater London in square kilometers for later comparison.
+total_area_london <- 1570  # This represents the total area in square kilometers.
+
+# Create a summary table of total area by primary use:
+# 1. Group data by 'Primary Use'.
+# 2. Sum the areas within each group.
+# 3. Calculate what percentage of London's total area each primary use category represents.
+primary_use_summary <- data %>%
+  group_by(`Primary Use`) %>%
+  summarise(Total_Area_km2 = sum(`Area (km²)`), .groups = 'drop') %>%
+  mutate(Percentage_of_London = (Total_Area_km2 / total_area_london) * 100) %>%
+  arrange(desc(Total_Area_km2))  # Sorts the summary by descending total area.
+
+# Define a function to print tables professionally with a title and ensuring all data rows are shown.
+print_professionally <- function(data, title) {
+  cat(title, "\n")
+  print(data, n = Inf)  # Display all rows
+  cat("\n")  # Add a newline for better readability
+}
+
+# Use the defined function to print the primary use summary table with a title.
+print_professionally(primary_use_summary, "Summary Table: Total Area by Primary Use (km²)")
+
+# Create Table 1 showing area by borough for each primary use:
+# 1. Group data by borough and primary use.
+# 2. Sum the area within each group.
+# 3. Reshape data from long to wide format, filling missing values with zero.
+# 4. Merge this table with a summary of total borough area to include in the visualization.
+table_1 <- data %>%
+  group_by(Borough, `Primary Use`) %>%
+  summarise(Area_km2 = sum(`Area (km²)`), .groups = 'drop') %>%
+  pivot_wider(names_from = `Primary Use`, values_from = Area_km2, values_fill = list(Area_km2 = 0)) %>%
+  left_join(data %>%
+              group_by(Borough) %>%
+              summarise(Total_Borough_Area_km2 = sum(`Area (km²)`), .groups = 'drop'),
+            by = "Borough")
+
+# Print Table 1 using the professional print function.
+print_professionally(table_1, "Table 1: Borough Areas by Primary Use (km²)")
+
+# Create Table 2: Calculating the percentage of borough area by primary use:
+# 1. Mutate across all columns except borough and total area to convert values to percentages.
+table_2 <- table_1 %>%
+  mutate(across(-c(Borough, Total_Borough_Area_km2), ~ .x / Total_Borough_Area_km2 * 100))
+
+# Print Table 2 using the professional print function.
+print_professionally(table_2, "Table 2: Percentage of Borough Areas by Primary Use")
+
+
+#------DATA COLLECTION AND ANALYSIS----------# 
+
+#-------PLOTTING A DETAILED MAP OF GREEN SPACES IN GREATER LONDON FROM A SPECIFIED OpenStreetMap (OSM) shapefile:
+# ---
+# EXPLANATION
+# Load Necessary Libraries:
+# sf needed for handling geographic data and ggplot2 for plotting. Ensure these packages are installed using install.packages("sf") and install.packages("ggplot2"), if not already installed.
+
+# Read the Shapefile
+# The shapefile specifically pertains to land use, which includes information about green spaces.
+
+# Filter for Green Spaces
+The dataset will include only the features that represent green spaces. Typically, this includes parks, forests, recreation areas, etc., represented by certain tags in OSM data.
+
+# Plot the Data
+# Using ggplot2, we create a plot that emphasizes green spaces. We customize the color to make green spaces distinguishable and add appropriate legends and titles.
+
+# Enhance the Map
+# We ensure the title is centered and add annotations where necessary for better information delivery.
+# Load necessary libraries
+library(sf)
+library(ggplot2)
+
+# Set the path to the shapefile
+shapefile_path <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/greater-london-latest-free.shp/gis_osm_landuse_a_free_1.shp"
+
+# Read the shapefile
+land_use <- st_read(shapefile_path)
+
+# Filter for green spaces - adjust the filter as per the actual tags in the dataset
+green_spaces <- land_use[land_use$fclass %in% c('park', 'forest', 'recreation_ground', 'nature_reserve'),]
+
+# Plot the data
+plot <- ggplot(data = green_spaces) +
+  geom_sf(fill = "green", color = "black") + # Green fill with black boundaries
+  labs(title = "Map of Green Spaces in Greater London",
+       subtitle = "Source: OpenStreetMap",
+       caption = "Data extracted from Geofabrik") +
+  theme(plot.title = element_text(hjust = 0.5), # Center the title
+        legend.position = "right") +
+  guides(fill = guide_legend(title = "Land Use")) # Add legend for land use types
+
+# Print the plot
+print(plot)
+
+
+
+#----PART 1 - GENERATING BOROUGH-SPECIFIC LAND USE TABLES WITH FOOTNOTES IN LaTeX Format:
+#---
+
+# # Load necessary libraries
+library(tidyverse)
+library(knitr)
+library(stringr)  # For string manipulation
+
+# Load data from a specified CSV file
+data <- read_csv("C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/GiGL_SpacesToVisit.csv")
+
+# Rename columns for clarity and convert area from hectares to square kilometers
+data <- data %>%
+  rename(`Primary Use` = PrimaryUse, `Area (Ha)` = AreaHa) %>%
+  mutate(`Area (km²)` = `Area (Ha)` / 100, Borough = str_to_title(Borough))
+
+# Define the specific land uses to analyze
+specified_vars <- c("Park", "Nature reserve", "Common", "Public woodland", 
+                    "Amenity green space", "Country park", "Formal garden", 
+                    "Community garden", "Village green", "City farm")
+
+# Filter data for the specified land uses and calculate the total and specific area
+borough_summary <- data %>%
+  filter(`Primary Use` %in% specified_vars) %>%
+  group_by(Borough, `Primary Use`) %>%
+  summarise(Area_km2 = sum(`Area (km²)`), .groups = 'drop') %>%
+  pivot_wider(names_from = `Primary Use`, values_from = Area_km2, values_fill = list(Area_km2 = 0)) %>%
+  left_join(data %>% 
+              group_by(Borough) %>%
+              summarise(Total_Borough_Area_km2 = sum(`Area (km²)`), .groups = 'drop'),
+            by = "Borough") %>%
+  mutate(across(all_of(specified_vars), ~ .x / Total_Borough_Area_km2 * 100))
+
+# Filter out rows where a land use percentage is 100%
+borough_summary <- borough_summary %>%
+  filter_if(is.numeric, all_vars(. < 100))
+
+# Generate and print/save LaTeX tables for each land use
+for (land_use in specified_vars) {
+  sorted_summary <- borough_summary %>%
+    arrange(desc(!!sym(land_use))) %>%
+    select(Borough, !!sym(land_use))
+
+  # Generate LaTeX table for each land use
+  table_latex <- kable(sorted_summary, format = "latex", booktabs = TRUE,
+                       caption = paste("Percentage of borough area used for", land_use,
+                                       "- GiGL Spaces to Visit dataset. Source: London Datastore."),
+                       escape = FALSE)
+
+  # Add footnotes to explain data considerations
+  footnote <- "\\footnote{Percentages less than 100% are shown. Data discrepancies or absences could result from incomplete data collection in the GiGL dataset. Borough repetition in tables indicates data provided for different land uses.}"
+
+  # Print LaTeX code in the console with footnote correctly formatted
+  cat(table_latex, footnote, "\n\n")
+  
+  # Save LaTeX code to files with correct closing of table environment
+  file_name <- paste0("LandUse_", gsub(" ", "_", land_use), ".tex")
+  writeLines(c(table_latex, footnote), con = file_name)
+}
+
+#-----(OPTIONAL - Advise is to just amend following error message in LaTeX instead of running this code)
+#--------PART 2 - GENERATING BOROUGH-SPECIFIC LAND USE TABLES WITH FOOTNOTES IN LaTeX Format:
+# ---
+
+# Generate and print/save LaTeX tables for each land use
+for (land_use in specified_vars) {
+  sorted_summary <- borough_summary %>%
+    arrange(desc(!!sym(land_use))) %>%
+    select(Borough, !!sym(land_use))
+
+  # Generate LaTeX table for each land use
+  # Adjusting the caption to include the footnote information
+  caption_text <- paste(
+    "Percentage of borough area used for", land_use,
+    "- GiGL Spaces to Visit dataset. Source: London Datastore.",
+    "\\newline Note: Percentages less than 100% are shown. Data discrepancies or absences could result from incomplete data collection in the GiGL dataset.",
+    "Borough repetition in tables indicates data provided for different land uses."
+  )
+  table_latex <- kable(sorted_summary, format = "latex", booktabs = TRUE,
+                       caption = caption_text, escape = FALSE)
+
+  # Print LaTeX code in the console
+  cat(table_latex, "\n\n")
+  
+  # Save LaTeX code to files
+  file_name <- paste0("LandUse_", gsub(" ", "_", land_use), ".tex")
+  writeLines(table_latex, con = file_name)
+}
+
+
+#------COMPREHENSIVE SPATIAL ANALYSIS OF GREEN SPACES IN GREATER LONDON:
+#----
+# Comprehensive spatial analysis of green spaces in Greater London using R and the specified data sources,
+# Data loading and preprocessing to spatial analysis and visualization. Concluding with outputting the results in LaTeX tables using kable and producing well-annotated map plots.
+
+# Load Necessary Libraries:
+# Ensure you have these libraries installed; they are crucial for handling spatial data and producing the outputs:
+library(sf)
+library(ggplot2)
+library(knitr)
+library(dplyr)
+
+# Load and Preprocess Data:
+# Load multiple shapefiles retrieve from London Data store including land use (for green spaces), buildings, roads, railways, traffic, transport, water bodies, and waterways.
+# Set paths to the shapefiles
+green_space_path <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/greater-london-latest-free.shp/gis_osm_landuse_a_free_1.shp"
+buildings_path <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/greater-london-latest-free.shp/gis_osm_buildings_a_free_1.shp"
+roads_path <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/greater-london-latest-free.shp/gis_osm_roads_free_1.shp"
+railways_path <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/greater-london-latest-free.shp/gis_osm_railways_free_1.shp"
+traffic_path <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/greater-london-latest-free.shp/gis_osm_traffic_a_free_1.shp"
+transport_path <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/greater-london-latest-free.shp/gis_osm_transport_free_1.shp"
+water_path <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/greater-london-latest-free.shp/gis_osm_water_a_free_1.shp"
+waterways_path <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/greater-london-latest-free.shp/gis_osm_waterways_free_1.shp"
+
+# Load shapefiles using st_read:
+green_spaces <- st_read(green_space_path)
+buildings <- st_read(buildings_path)
+roads <- st_read(roads_path)
+railways <- st_read(railways_path)
+traffic <- st_read(traffic_path)
+transport <- st_read(transport_path)
+water <- st_read(water_path)
+waterways <- st_read(waterways_path)
+
+# Filter green spaces (assuming 'park', 'forest', etc. are the categories of interest):
+green_spaces <- green_spaces[green_spaces$fclass %in% c("park", "forest", "recreation_ground", "nature_reserve"),]
+
+# Analyze Green Spaces:
+# Calculate area and perimeter
+green_spaces$area <- st_area(green_spaces)
+green_spaces$perimeter <- st_length(green_spaces)
+
+# Basic statistics of area:
+area_stats <- green_spaces %>% summarise(
+  Total_Area = sum(area),
+  Mean_Area = mean(area),
+  Min_Area = min(area),
+  Max_Area = max(area)
+)
+
+# Output Results to LaTeX Tables:
+# Output area statistics as a LaTeX table
+kable(area_stats, format = "latex", booktabs = TRUE, caption = "Statistics of Green Spaces Areas")
+
+
+# Create Map Plots:
+# Plot green spaces with roads and buildings for context
+ggplot() +
+  geom_sf(data = buildings, fill = "gray90", color = "gray30") +
+  geom_sf(data = roads, color = "gray60") +
+  geom_sf(data = green_spaces, fill = "green", color = "darkgreen", size = 0.1) +
+  labs(title = "Map of Green Spaces in Greater London",
+       subtitle = "Green spaces including parks, forests, and recreation areas",
+       caption = "Source: OpenStreetMap") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5), # Centering the title
+        plot.subtitle = element_text(hjust = 0.5))
+
+# Save Plots and Tables - Export your plots and tables to files for further use or publication.:
+# Save plot
+ggsave("green_spaces_map.pdf", width = 11, height = 8)
+
+# Save table:
+kable(area_stats, format = "latex", booktabs = TRUE, caption = "Statistics of Green Spaces Areas") %>%
+  writeLines("area_stats.tex")
+
+# Print table:
+# Assuming you already have `area_stats` data frame from previous analysis
+library(knitr)
+
+# Use kable to create a LaTeX formatted table and save to a file
+kable(area_stats, format = "latex", booktabs = TRUE, caption = "Statistics of Green Spaces Areas") %>%
+  writeLines("area_stats.tex")
+
+# Read and Print the .tex File Content:
+# Read the .tex file
+tex_content <- readLines("area_stats.tex")
+
+# Print the content
+cat(tex_content, sep = "\n")
+
+#------ANALYSIS OF CORRELATION BETWEEN GREEN SPACES AND MENTAL HEALTH OUTCOMES IN CHILDREN IN LONDON BOROUGHS
+#------
+# To analyze how the accessibility of green spaces correlates with mental health issues across different boroughs in London, you will need to perform a few steps involving data manipulation and statistical analysis using R. Below, I outline the steps along with R code, including data import, data merging, model fitting using logistic, multivariate, and multi-level regression techniques, and producing well-labeled charts. 
+# We'll use alternative packages given constraints on car, carData, and lme4.
+
+# Load Required Libraries
+# Install packages if they are not already installed
+packages <- c("readxl", "dplyr", "ggplot2", "nlme", "MASS")
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+
+# Load packages
+library(readxl)   # For reading Excel files
+library(dplyr)    # For data manipulation
+library(ggplot2)  # For creating charts
+library(nlme)     # For multi-level models
+library(MASS)     # For stepwise regression
+
+# Import Data
+# Assuming the Excel files are correctly formatted and accessible.
+# Paths to the Excel files
+path_green_spaces <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/GiGL_SpacesToVisit.xlsx"
+path_mental_health <- "C:/Users/chukw/OneDrive/Documents/draft_XX50217/Data/mental-health-common-problems-borough.xlsx"
+
+# Reading the data
+green_spaces <- read_excel(path_green_spaces)
+mental_health <- read_excel(path_mental_health)
+
+# Data Cleaning and Merging
+# Ensure the 'Borough' columns are compatible for merging
+# Data cleaning
+green_spaces <- green_spaces %>%
+  group_by(Borough) %>%
+  summarize(TotalGreenSpace = sum(AreaHa)) %>%
+  ungroup()
+
+# Merging data on 'Borough'
+data <- merge(green_spaces, mental_health, by = "Borough")
+
+## Statistical Analysis
+#-------
+
+# Install and Load Necessary Packages
+# Ensure knitr is installed and loaded, as it will be used to format the output tables in LaTeX.
+
+# Load required libraries or install them if they are not already installed
+packages_needed <- c("knitr", "dplyr", "nlme")
+packages_to_install <- packages_needed[!(packages_needed %in% installed.packages()[,"Package"])]
+if(length(packages_to_install)) install.packages(packages_to_install)
+
+library(knitr)
+library(dplyr)
+library(nlme)
+
+# Prepare the Data
+This step assumes that data is already loaded and contains the appropriate variables.
+
+# Define the List of Disorders and Loop Through Each Disorder
+# The loop will modify the dependent variable for the logistic regression to be binary based on each disorder's median, and adjust the multi-level model to reflect the specific disorder being analyzed.
+# List of disorders to analyze
+disorders <- c("Any_neurotic_disorder", "All_phobias", "Depressive_episode", 
+               "Generalised_anxiety_disorder", "Mixed_anxiety_depression", 
+               "Obsessive_compulsive_disorder", "Panic_disorder")
+
+# Run Statistical Analyses
+
+# Loop through each disorder to perform analyses
+for (disorder in disorders) {
+  # Creating a binary variable for logistic regression
+  # Convert the disorder variable into a binary outcome based on its median
+  binary_var_name <- paste(disorder, "binary", sep = "_")  # Creating a valid variable name
+  data[[binary_var_name]] <- ifelse(data[[disorder]] > median(data[[disorder]], na.rm = TRUE), 1, 0)
+  
+  # Logistic Regression
+  # Constructing the formula with `as.formula()` and ensuring that variable names are properly handled
+  logistic_formula <- as.formula(paste(binary_var_name, "~ TotalGreenSpace + Generalised_anxiety_disorder"))
+  logistic_model <- glm(logistic_formula, data = data, family = binomial())
+  print(kable(summary(logistic_model)$coefficients, format = "latex", 
+              caption = paste("Logistic Regression Output for", disorder)))
+  
+  # Multi-level Regression
+  # Again, constructing the formula properly using `as.formula()`
+  mlm_formula <- as.formula(paste(disorder, "~ TotalGreenSpace"))
+  multi_level_model <- lme(mlm_formula, random = ~ 1 | Borough, data = data)
+  print(kable(summary(multi_level_model)$tTable, format = "latex", 
+              caption = paste("Multi-level Regression Output for", disorder)))
+}
+
+# Code Explaination:
+# Binary Variable Creation:
+# binary_var_name: A new variable name is created by concatenating the disorder name with "_binary" which ensures no spaces are present in the variable names. This name is used to store the binary outcome in the dataset.
+# The ifelse() function is used to convert numeric disorder measurements into a binary format where 1 indicates a value above the median, and 0 indicates below. This is crucial for logistic regression which requires binary outcomes.
+# Logistic Regression:
+# as.formula(): Dynamically creates a formula object for the logistic regression. The formula is a text string that describes the model to be fitted, with the response on the left of ~ and predictors on the right. By ensuring the variable name (binary_var_name) does not contain spaces and is correctly referenced, we avoid the syntax error.
+# glm(): Fits the generalized linear model assuming a binomial distribution (logistic regression), which is suitable for binary response data.
+# Multi-level Regression:
+# as.formula(): Similar to logistic regression, constructs the formula for the multi-level model. It directly uses the disorder variable to fit the model, assuming the data within boroughs are correlated, which justifies the use of random effects (~ 1 | Borough).
+# Output:
+# kable(): Produces a well-formatted LaTeX table of the model's coefficients, making it suitable for inclusion in reports and presentations. It provides statistical details such as estimates, standard errors, z-values, and p-values for logistic regression, and t-values for multi-level regression.
+
+# Visualization
+# Plotting green space vs depressive episodes
+ggplot(data, aes(x = TotalGreenSpace, y = Depressive_episode)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(title = "Relationship Between Green Space and Depressive Episodes", x = "Total Green Space (ha)", y = "Depressive Episodes")
+
+## Explaination
+# Each block of R code performs specific operations:
+
+# Data Import: Loads data from specified paths.
+# Data Cleaning and Merging: Summarizes green space data by borough and merges it with mental health data.
+# Statistical Analysis: Applies different statistical techniques to model the data.
+# Visualization: Generates a plot to visually assess the relationship between green space area and depressive episodes.
+
+
+## Creating Enhanced Plots
+library(ggplot2)  # Load the ggplot2 package for creating plots
+
+# Define the disorders to plot
+disorders <- c("Any_neurotic_disorder", "All_phobias", "Depressive_episode", 
+               "Generalised_anxiety_disorder", "Mixed_anxiety_depression", 
+               "Obsessive_compulsive_disorder", "Panic_disorder")
+
+# Generate and customize plots for each disorder
+for (disorder in disorders) {
+  plot <- ggplot(data, aes(x = TotalGreenSpace, y = !!sym(disorder), label = Borough)) +
+    geom_point(color = 'darkblue', alpha = 0.6, size = 4) +  # Dark blue points for visibility
+    geom_smooth(method = "lm", color = 'red', se = TRUE) +  # Red regression line with confidence interval
+    geom_text(check_overlap = TRUE, hjust = 1.1, vjust = 1.1, size = 3) +  # Adding borough labels
+    labs(title = paste("Green Space Accessibility vs", disorder, "\nImpact on Children's Mental Health in London Boroughs"),
+         subtitle = "Assessing Correlations Between Green Spaces and Mental Health Outcomes",
+         caption = "Data Source: Association of Public Health Observatories retrieved from London Datastore",
+         x = "Total Green Space (ha)",
+         y = paste("Prevalence of", disorder)) +
+    theme_minimal(base_size = 14) +  # Use a minimal theme with a clean look
+    theme(plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+          plot.subtitle = element_text(size = 14),
+          plot.caption = element_text(size = 12),
+          plot.background = element_rect(fill = "white"),  # White background for clarity
+          panel.background = element_rect(fill = "white", colour = "black"),  # White panel with black border
+          legend.background = element_rect(fill = "white", colour = "black"))  # Ensure legend is clear
+
+  print(plot)  # Display the plot
+}
+
+## EXPLANATION
+
+# Loading ggplot2: The ggplot2 package is used for its versatile plotting capabilities.
+# Disorders Loop: We iterate over a list of mental health disorders to generate a separate plot for each.
+# Scatter Plot Elements:
+# geom_point: Plots the prevalence data as points, using dark blue for visibility against the white background.
+# geom_smooth: Adds a linear regression line with a confidence interval in red to show the trend and the reliability of the estimate.
+# geom_text: Adds borough names as labels near each point, adjusting text position to avoid overlap and ensure readability.
+# Plot Labels and Annotations:
+# Title and Subtitle: Clearly state the focus of the study, emphasizing the investigation of green space accessibility's impact on children's mental health across London boroughs.
+# Caption: Credits the data source.
+# Axis Labels: Describe what each axis represents.
+# Theming:
+# theme_minimal: Provides a clean and uncluttered visual appearance.
+# Text Elements: Customized for emphasis and clarity; title is bold and centered.
+# Backgrounds: Set to white for professional presentation standards.
+
+
+
+
+
+
+
+
+
+ 
+
+
+
